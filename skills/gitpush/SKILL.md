@@ -5,6 +5,18 @@ description: Safely push code to GitHub while preventing sensitive files. Use wh
 
 # gitpush
 
+## Configuration
+
+> Run `setup.sh` from the repo root to set these automatically.
+> Or replace manually before use:
+
+```
+GIT_NAME  = YOUR_GITHUB_USERNAME
+GIT_EMAIL = YOUR_EMAIL
+```
+
+---
+
 ## Purpose
 Push code to GitHub following developer best practices — git identity pre-check, .gitignore enforcement, secret scanning, and explicit confirmation before every push.
 
@@ -40,8 +52,8 @@ git config user.email
 question: "Git identity isn't set. What name and email should commits use?"
 header: "Git identity"
 options:
-  - label: "ashcastelinocs124 / ashleyn4@illinois.edu"
-    description: "Use the default account"
+  - label: "YOUR_GITHUB_USERNAME / YOUR_EMAIL"
+    description: "Use the configured account (set via setup.sh)"
   - label: "Enter manually"
     description: "I'll type my name and email"
 ```
