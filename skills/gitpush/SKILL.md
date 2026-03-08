@@ -5,221 +5,338 @@ description: Safely push code to GitHub while preventing sensitive files. Use wh
 
 # gitpush
 
-## Configuration
-
-> Run `setup.sh` from the repo root to set these automatically.
-> Or replace manually before use:
-
-```
-GIT_NAME  = YOUR_GITHUB_USERNAME
-GIT_EMAIL = YOUR_EMAIL
-```
-
----
-
 ## Purpose
-Push code to GitHub following developer best practices — git identity pre-check, .gitignore enforcement, secret scanning, and explicit confirmation before every push.
+Push code to GitHub following basic industry practices, with explicit repo/branch confirmation and strict sensitive-file exclusions.
 
 ## Required Safety Rules
-- Never push `.env`, `.claude/**`, credentials, or secrets.
-- **A `.gitignore` must exist before staging.** If it's missing, create one.
-- **`.env` and all variants must be in `.gitignore`.** Check before staging.
+- Never push `.env`, `.claude/**`, credentials, or secrets (e.g., keys, tokens, config with secrets).
+- Never push `.gitignore` — unstage it silently if it's staged.
+- Never push `memory.md` — unstage it silently if it's staged.
+- Always review `git status` and `git diff` before pushing.
+- **Always ask the user which repo and branch to push to — never assume.**
 - Always show a final confirmation summary and get explicit approval before committing or pushing.
 - Never force-push unless explicitly requested.
-- **"Chat about this" = full stop.** Every hook includes a "Chat about this" option. If selected, stop the workflow completely, read what the user says, and respond to them. Do NOT continue pushing. Resume only when they explicitly say to.
+- If this is the first push (no remote history), ensure a `README.md` exists before pushing.
+- **"Chat about this" = full stop.** Every hook includes a "Chat about this" option. If selected, stop the workflow completely, read what the user says, and respond. Do NOT continue pushing. Resume only when they explicitly say to.
+- **Always verify commits are attributed to the correct account.** Run `git config user.name` and `git config user.email` and confirm both match:
+  - `user.name` = `ashcastelinocs124`
+  - `user.email` = `ashleyn4@illinois.edu`
+  - If either is wrong, run `git config user.name "ashcastelinocs124"` and `git config user.email "ashleyn4@illinois.edu"` to fix before committing.
+
+## Stored GitHub Identity
+- **Username:** `ashcastelinocs124`
+- **Email:** `ashleyn4@illinois.edu`
+- Always verify and fix git config to match before committing (see Step 1).
 
 ---
 
 ## Workflow
 
-### Step 1 — Gather info + Identity check
+### Step 0 — Confirm target repo (BLOCKING — use AskUserQuestion)
 
-Run in parallel:
-```bash
-git status
-git diff
-git remote -v
-git branch -a
-git config user.name
-git config user.email
+Run `git remote -v` first. Then ask:
+
+**If a remote is already set:**
 ```
-
-**Identity logic (do NOT ask if already set):**
-
-- If `git config user.name` and `git config user.email` are both non-empty → use them as-is, no question needed
-- If either is empty → use AskUserQuestion:
-
-```
-question: "Git identity isn't set. What name and email should commits use?"
-header: "Git identity"
+question: "Push to <current remote URL>?"
+header: "Target repo"
 options:
-  - label: "YOUR_GITHUB_USERNAME / YOUR_EMAIL"
-    description: "Use the configured account (set via setup.sh)"
-  - label: "Enter manually"
-    description: "I'll type my name and email"
+  - label: "Yes — push here"
+    description: "<current remote URL>"
+  - label: "No — different repo"
+    description: "I'll pick a different repo"
   - label: "Chat about this"
     description: "Stop — I want to talk about this first"
 ```
+- If "Yes": proceed with current remote.
+- If "No": run `gh repo list ashcastelinocs124 --limit 5 --json name,url,updatedAt --sort updated`, show results as options + "Paste a link", set new remote with `git remote set-url origin <url>`.
+- If "Chat about this": stop completely and listen.
 
-Then run:
+**If no remote is set:** skip to Step 1.5 (repo selection).
+
+### Step 1 — Gather info
+Run `git status`, `git diff`, `git remote -v`, and `git branch` to understand current state.
+
+Also run `git config user.name` and `git config user.email`. If they don't match `ashcastelinocs124` / `ashleyn4@illinois.edu`, fix them now:
 ```bash
-git config user.name "<confirmed-name>"
-git config user.email "<confirmed-email>"
+git config user.name "ashcastelinocs124"
+git config user.email "ashleyn4@illinois.edu"
 ```
 
----
+### Step 1.5 — Repo selection when no remote is set (BLOCKING — use AskUserQuestion)
 
-### Step 1.5 — Repo selection (only if no remote set) (BLOCKING — use AskUserQuestion)
+**Trigger:** `git remote -v` returns empty output OR the user did not provide a repo URL.
 
-**Skip this step if `git remote -v` returned a remote.**
-
-If no remote:
+Run:
 ```bash
-gh repo list --limit 5 --json name,url,updatedAt --sort updated
+gh repo list ashcastelinocs124 --limit 5 --json name,url,updatedAt --sort updated
 ```
 
+This returns the 5 most recently updated repos. Build an `AskUserQuestion` from the results:
+
 ```
-question: "No remote is set. Which GitHub repo should this push to?"
+question: "No remote is set. Which GitHub repo should this be pushed to?"
 header: "Target repo"
 options:
   - label: "<repo-name-1>"
-    description: "Last updated: <updatedAt>"
+    description: "Last updated: <updatedAt> — github.com/ashcastelinocs124/<repo-name-1>"
   - label: "<repo-name-2>"
-    description: "Last updated: <updatedAt>"
+    description: "Last updated: <updatedAt> — github.com/ashcastelinocs124/<repo-name-2>"
+  - label: "<repo-name-3>"
+    description: "Last updated: <updatedAt> — ..."
   - label: "Paste a link"
-    description: "I'll provide the full repo URL"
+    description: "I'll provide the full repo URL myself"
   - label: "Chat about this"
     description: "Stop — I want to talk about this first"
 ```
 
-Then: `git remote add origin <url>`
+- If user selects a repo from the list: set remote with `git remote add origin <url>` then continue.
+- If user selects "Paste a link" or types "Other": ask them to provide the full URL, then `git remote add origin <url>`.
+- If user selects "Chat about this": stop completely and listen.
+- If `gh` is not authenticated or fails: skip to the "Paste a link" fallback directly.
 
-If `gh` fails or isn't authenticated → go straight to "Paste a link".
+**Do not assume or guess a repo. Always ask.**
 
 ---
 
 ### Step 2 — Branch selection (BLOCKING — use AskUserQuestion)
 
+Use the `AskUserQuestion` tool to ask which branch to push to. Build the options dynamically from `git branch -a` output:
+
 ```
 question: "Which branch do you want to push to?"
 header: "Target branch"
 options:
-  - label: "<current branch>"
+  - label: "<current branch>"         ← always first
     description: "Push to current branch (currently checked out)"
-  - label: "main"
-    description: "Push to main — this is the default branch"
+  - label: "main"                     ← if exists and different from current
+    description: "Push to main branch"
   - label: "New branch"
-    description: "Create and push to a new branch"
+    description: "Create and push to a new branch — I'll ask for the name"
   - label: "Chat about this"
     description: "Stop — I want to talk about this first"
 ```
 
-If "New branch": ask for the name, then `git checkout -b <name>`.
+- If user selects "New branch", ask for the name with a follow-up `AskUserQuestion` or text prompt.
+- If user selects "Chat about this": stop completely and listen.
+- If pushing to main/master, note: "This pushes directly to the default branch."
+
+### Step 2.5 — Screen recording for README (BLOCKING — use AskUserQuestion)
+
+Ask before touching the README:
+
+```
+question: "Do you want to record the app and embed a demo in the README?"
+header: "Demo recording"
+options:
+  - label: "Yes — record and embed"
+    description: "Invoke the screen-recording skill, render a GIF, and add it to the README"
+  - label: "I already have a video — add it"
+    description: "I'll paste a YouTube URL or GIF path to embed"
+  - label: "No — skip recording"
+    description: "Proceed without a demo video"
+  - label: "Chat about this"
+    description: "Stop — I want to talk about this first"
+```
+
+**If "Yes — record and embed":**
+1. Invoke the `screen-record` skill (see `ashcastelinocs124/public-skill`) to capture the app flow
+2. After recording completes, render a GIF: look for a `render:gif` script in package.json or equivalent
+3. Commit the GIF to the repo (e.g. `docs/demo.gif` or `video/out/demo.gif`)
+4. Add to README at a visible position (below the description, before install steps):
+   ```markdown
+   ![Demo](docs/demo.gif)
+   ```
+5. Continue to README check step
+
+**If "I already have a video — add it":**
+- If YouTube URL: add a linked thumbnail to README:
+  ```markdown
+  [![Watch the demo](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)](https://youtu.be/VIDEO_ID)
+  ```
+- If local GIF path: copy to `docs/` and embed with `![Demo](docs/demo.gif)`
+- Continue to README check step
+
+**If "No — skip recording":** continue immediately.
+**If "Chat about this":** stop completely and listen.
 
 ---
 
-### Step 3 — Best-practices audit (BLOCKING — fix before staging)
+### Step 2.6 — README check (BLOCKING — use AskUserQuestion)
 
-Run all checks. Do not proceed until each passes:
-
-**3a. `.gitignore` must exist**
-```bash
-test -f .gitignore || echo "MISSING"
-```
-If missing → create one with at minimum:
-```
-.env
-.env.*
-.env.local
-.claude/
-node_modules/
-*.pem
-*.key
-```
-
-**3b. Dotenv variants must be covered**
-
-Check `.gitignore` covers all of:
-- `.env`
-- `.env.*`
-- `.env.local`
-
-If any are missing, add them to `.gitignore` before staging.
-
-**3c. Scan staged + modified files for secrets**
-
-Flag and stop if any of these are staged or modified:
-- `.env`, `.env.*`, `.env.local`
-- `.claude/**`
-- `credentials.json`, `secrets.*`, `*.pem`, `*.key`
-- Files containing obvious secrets (API keys, tokens, private keys)
-
-If flagged → stop and ask the user what to do. Do not proceed until resolved.
-
----
-
-### Step 4 — README check (BLOCKING — use AskUserQuestion)
+Check if a `README.md` exists in the repo root. Then use `AskUserQuestion`:
 
 ```
 question: "Does the README need to be updated before pushing?"
-header: "README"
+header: "README update"
 options:
-  - label: "No, it's fine"
-    description: "Proceed without changes"
+  - label: "No, README is fine"
+    description: "Proceed without touching the README"
   - label: "Yes, update it"
-    description: "Tell me what changed and I'll update it"
-  - label: "No README exists — create one"   ← only if README is missing
-    description: "Generate a basic README from repo contents"
+    description: "I'll describe what changed and you update the README before pushing"
+  - label: "No README exists — create one"    ← only show if README is missing
+    description: "Generate a basic README before pushing"
   - label: "Chat about this"
     description: "Stop — I want to talk about this first"
 ```
 
----
+- If user selects "Yes, update it": ask them what to add/change, make the edits, then continue.
+- If user selects "create one": generate a minimal README based on the repo contents, show it for approval, then continue.
+- If user selects "Chat about this": stop completely and listen.
 
-### Step 5 — Final confirmation (BLOCKING — use AskUserQuestion)
+### Step 3 — Scan for sensitive files
+- `.env`, `.env.*`
+- `.claude/**`
+- `credentials.json`, `secrets.*`, `*.pem`, `*.key`
+- `.gitignore` — always exclude, unstage without asking
+- `memory.md` — always exclude, unstage without asking
+- Any file containing obvious secrets
 
-Display:
+If sensitive files are staged or modified, **stop and ask** the user what to do. For `.gitignore` and `memory.md`, unstage them silently with `git reset HEAD <file>` and note it in the confirmation summary.
+
+**Also audit `.gitignore` coverage before staging:**
+- `.env` in `.gitignore` does NOT match `.env.local` or `.env.*` — check that all dotenv variants are covered
+- If `.gitignore` is missing `.env.*` or `.env.local`, offer to add them before proceeding with `git add`
+
+### Step 4 — Show final confirmation summary + AskUserQuestion gate (BLOCKING — do not skip)
+
+Display the summary to the user:
+
 ```
 Ready to push:
   Repo:    <remote URL>
-  Branch:  <branch>
-  Files:   <staged files>
-  Commit:  "<message>"
-  Author:  <user.name> <<user.email>>  ✓
-  .gitignore: ✓   Secrets scan: ✓
+  Branch:  <branch name>
+  Files:   <list of staged files>
+  Commit:  "<proposed commit message>"
+  Author:  ashcastelinocs124 <ashleyn4@illinois.edu>  ✓
 ```
 
+Then **immediately use the `AskUserQuestion` tool** with this exact question:
+
 ```
-question: "Push to <branch> on <repo>?"
+question: "Are you sure you want to push to <branch> on <repo>?"
 header: "Confirm push"
 options:
   - label: "Yes, push it"
-    description: "Commit and push"
+    description: "Proceed with git push"
   - label: "No, cancel"
-    description: "Abort — nothing will be pushed"
+    description: "Abort — do not push anything"
   - label: "Chat about this"
     description: "Stop — I want to talk about this first"
 ```
 
-**Do not run git commit or git push until "Yes, push it" is selected.**
-**If "Chat about this" is selected at any hook: stop immediately, read what the user says, and respond. Do not resume the push workflow until they explicitly say to.**
+**Do NOT run any git commit or git push command until the user selects "Yes, push it".**
+**If "No, cancel": abort and tell the user nothing was pushed.**
+**If "Chat about this": stop completely, listen to what they say, and wait for them to redirect before doing anything.**
+
+### Step 5 — Execute
+1. If first push, verify `README.md` exists; create one only if the user asks.
+2. Ensure branch is up to date (pull/rebase if needed) unless user says otherwise.
+3. Commit and push to the confirmed repo and branch.
 
 ---
 
-### Step 6 — Execute
-1. `git add <files>` (never `git add .` — be specific)
-2. `git commit -m "<message>"`
-3. `git push origin <branch>`
+### Step 6 — Deploy (BLOCKING — use AskUserQuestion)
+
+After a successful push, always ask:
+
+```
+question: "Do you want to deploy after pushing?"
+header: "Deploy"
+options:
+  - label: "No — push only"
+    description: "Done. No deployment."
+  - label: "Vercel"
+    description: "Deploy frontend/fullstack app to Vercel"
+  - label: "Railway"
+    description: "Deploy backend or full-stack app to Railway"
+  - label: "GitHub Pages"
+    description: "Deploy static site from /docs or gh-pages branch"
+  - label: "Netlify"
+    description: "Deploy static site or JAMstack app to Netlify"
+  - label: "Chrome Web Store"
+    description: "Package and submit extension update to the Chrome Web Store"
+  - label: "Chat about this"
+    description: "Stop — I want to talk about this first"
+```
+
+**If "Chat about this":** stop completely and listen.
+
+#### Platform playbooks
+
+**Vercel:**
+```bash
+# Install CLI if needed
+npm i -g vercel
+# Deploy production
+vercel --prod
+```
+- Ask if this is a first deploy (needs `vercel link` first)
+- After deploy: print the live URL
+- Verify with `curl -s <url> | head -5`
+
+**Railway:**
+```bash
+railway up --detach
+# Then run migrations if applicable
+railway run <migrate-command>
+```
+- After deploy: `railway logs | tail -20` to check for errors
+- Print the Railway dashboard URL
+
+**GitHub Pages:**
+```bash
+# Option A — docs/ folder on main (most common)
+# Ensure Settings → Pages → Source = main / docs/
+# Nothing to run — GitHub deploys on push automatically
+
+# Option B — gh-pages branch
+npx gh-pages -d build   # or 'dist', 'out', '_site'
+```
+- Ask which option: docs/ folder vs gh-pages branch
+- If docs/ folder: confirm Pages is enabled in repo settings, print the Pages URL
+- After deploy: `curl -s <pages-url>` to verify it's live
+
+**Netlify:**
+```bash
+npm i -g netlify-cli
+netlify deploy --prod --dir=build  # adjust dir as needed
+```
+- Ask for the publish directory if not obvious (`build`, `dist`, `out`, `public`)
+- After deploy: print the live URL
+
+**Chrome Web Store:**
+- Remind user the store has a manual review process (no CLI automation)
+- Steps to walk through:
+  1. Build the production zip (exclude `node_modules`, `tests/`, dev files)
+  2. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+  3. Select the extension → **Package** → **Upload new package** → upload zip
+  4. Fill in any updated store listing details
+  5. Click **Submit for review**
+- Offer to build the zip now: `zip -r extension.zip <src-dir>/ --exclude "*/node_modules/*" --exclude "*/tests/*"`
 
 ---
 
-## Example Flow
+## Example Prompt
 User: "push my changes"
-1. Run info checks — identity already set → skip hook
-2. Remote exists → skip repo selection
-3. AskUserQuestion → branch
-4. Audit .gitignore → add missing `.env.*` if needed
-5. Scan for secrets → clean
-6. AskUserQuestion → README
-7. Show summary → AskUserQuestion → confirm
-8. Commit and push
+Assistant:
+1. Run status/diff/remote/branch checks + fix git identity if needed.
+2. **If no remote set:** run `gh repo list` → AskUserQuestion with last 5 repos + "Paste a link" option → set remote.
+3. AskUserQuestion → "Which branch?" (options: current branch / main / new branch)
+4. AskUserQuestion → "Record app for README?" (yes / have video / skip)
+5. AskUserQuestion → "Does the README need updating?" (yes / no / create)
+6. Scan for sensitive files — stop if any found.
+7. Show confirmation summary (repo, branch, files, commit message, author).
+8. AskUserQuestion → "Are you sure you want to push?" (Yes, push it / No, cancel)
+9. Commit and push only after explicit "Yes, push it".
+10. AskUserQuestion → "Deploy?" (No / Vercel / Railway / GitHub Pages / Netlify / Chrome Web Store)
+
+---
+
+## Examples
+
+See [`examples.md`](.claude/skills/gitpush/examples.md) for full annotated walkthroughs.
+
+**Available examples:**
+- **Example 1** — Pushing files to a separate empty repo (different repo from working directory, first-time push, false-positive secret scan)
+
