@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill Benchmark — {{SKILL_NAME}}</title>
+<style>
+  /* ── Reset & Base ────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    padding: 0 0 4rem;
+  }
+
+  /* ── Banner ──────────────────────────────────────────────────────── */
+  .banner {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 2rem 1.5rem 1.8rem;
+    text-align: center;
+  }
+
+  .banner h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #58a6ff;
+    margin-bottom: 0.3rem;
+  }
+
+  .banner .subtitle {
+    font-size: 0.85rem;
+    color: #8b949e;
+    margin-bottom: 1.4rem;
+  }
+
+  /* ── Metrics Row ─────────────────────────────────────────────────── */
+  .metrics-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .metric-card {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 0.9rem 1.3rem;
+    min-width: 140px;
+    flex: 1 1 140px;
+    max-width: 200px;
+    text-align: center;
+  }
+
+  .metric-card .label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+    margin-bottom: 0.3rem;
+  }
+
+  .metric-card .value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #c9d1d9;
+  }
+
+  .metric-card .value.accent { color: #58a6ff; }
+  .metric-card .value.green  { color: #3fb950; }
+  .metric-card .value.red    { color: #f85149; }
+  .metric-card .value.yellow { color: #d29922; }
+
+  /* ── Section Headers ─────────────────────────────────────────────── */
+  .section-header {
+    max-width: 1200px;
+    margin: 2.5rem auto 1rem;
+    padding: 0 1.5rem;
+  }
+
+  .section-header h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #c9d1d9;
+    border-bottom: 1px solid #21262d;
+    padding-bottom: 0.5rem;
+  }
+
+  /* ── Test Row (side-by-side) ─────────────────────────────────────── */
+  .test-row {
+    max-width: 1200px;
+    margin: 0 auto 1.6rem;
+    padding: 0 1.5rem;
+  }
+
+  .test-row .test-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #c9d1d9;
+    margin-bottom: 0.15rem;
+  }
+
+  .test-row .test-prompt {
+    font-size: 0.78rem;
+    color: #8b949e;
+    margin-bottom: 0.7rem;
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .comparison-columns {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .comparison-columns .col {
+    flex: 1 1 50%;
+    min-width: 0;
+  }
+
+  /* ── Test Card ───────────────────────────────────────────────────── */
+  .test-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .test-card .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .test-card .card-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #8b949e;
+    font-weight: 600;
+  }
+
+  .test-card .card-label.with    { color: #58a6ff; }
+  .test-card .card-label.without { color: #8b949e; }
+
+  /* ── Score Badges ────────────────────────────────────────────────── */
+  .score-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.55rem;
+    border-radius: 20px;
+    line-height: 1.3;
+  }
+
+  .score-badge.green  { background: rgba(63,185,80,0.15);  color: #3fb950; }
+  .score-badge.yellow { background: rgba(210,153,34,0.15);  color: #d29922; }
+  .score-badge.red    { background: rgba(248,81,73,0.15);   color: #f85149; }
+
+  /* ── Pass / Fail Indicator ───────────────────────────────────────── */
+  .pass-indicator {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .pass-indicator.pass { color: #3fb950; }
+  .pass-indicator.fail { color: #f85149; }
+
+  /* ── Score Breakdown ─────────────────────────────────────────────── */
+  .score-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .score-item {
+    font-size: 0.7rem;
+    color: #8b949e;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+  }
+
+  .score-item .dim-label { color: #6e7681; }
+  .score-item .dim-value { font-weight: 700; margin-left: 0.2rem; }
+
+  /* ── Output Block ────────────────────────────────────────────────── */
+  .output-block {
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+
+  .output-block pre {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  /* ── Responsive ──────────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .comparison-columns {
+      flex-direction: column;
+    }
+    .metric-card {
+      max-width: none;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Banner populated by JS -->
+<div class="banner" id="banner">
+  <h1 id="skill-name"></h1>
+  <p class="subtitle">Skill Benchmark Comparison</p>
+  <div class="metrics-row" id="metrics-row"></div>
+</div>
+
+<!-- Test results populated by JS -->
+<div class="section-header">
+  <h2>Test Results</h2>
+</div>
+<div id="test-results"></div>
+
+<!-- ── Embedded Data (replaced by generate_comparison.py) ────────── -->
+<script id="data-metrics" type="application/json">
+{{METRICS_JSON}}
+</script>
+
+<script id="data-tests" type="application/json">
+{{TEST_RESULTS_JSON}}
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Fallback / Preview Data ───────────────────────────────────────
+  var FALLBACK_METRICS = {
+    with_skill:    { avg_score: 4.2, time_seconds: 12, output_chars: 2400 },
+    without_skill: { avg_score: 2.8, time_seconds: 15, output_chars: 3100 },
+    win_rate: "4/5"
+  };
+
+  var FALLBACK_TESTS = [
+    {
+      name: "Edge-case handling",
+      prompt: "Handle an input with Unicode characters and empty strings.",
+      with_skill: {
+        output: "def handle(s):\n    if not s:\n        return \"\"\n    return s.encode('utf-8').decode('utf-8')\n\n# Handles empty + unicode correctly",
+        scores: { correctness: 5, completeness: 4, quality: 5, adherence: 4 },
+        total: 4.5,
+        pass: true
+      },
+      without_skill: {
+        output: "def handle(s):\n    return s\n# No special handling",
+        scores: { correctness: 3, completeness: 2, quality: 3, adherence: 2 },
+        total: 2.5,
+        pass: false
+      }
+    },
+    {
+      name: "Error response format",
+      prompt: "Return a structured JSON error when validation fails.",
+      with_skill: {
+        output: "{\n  \"error\": true,\n  \"code\": \"VALIDATION_FAILED\",\n  \"message\": \"Field 'email' is required.\",\n  \"details\": [{\"field\": \"email\", \"rule\": \"required\"}]\n}",
+        scores: { correctness: 5, completeness: 5, quality: 4, adherence: 5 },
+        total: 4.75,
+        pass: true
+      },
+      without_skill: {
+        output: "Error: validation failed",
+        scores: { correctness: 2, completeness: 1, quality: 2, adherence: 1 },
+        total: 1.5,
+        pass: false
+      }
+    },
+    {
+      name: "Logging implementation",
+      prompt: "Add structured logging with severity levels.",
+      with_skill: {
+        output: "import logging, json\n\nclass StructuredFormatter(logging.Formatter):\n    def format(self, record):\n        return json.dumps({\n            \"ts\": self.formatTime(record),\n            \"level\": record.levelname,\n            \"msg\": record.getMessage(),\n            \"module\": record.module\n        })\n\nhandler = logging.StreamHandler()\nhandler.setFormatter(StructuredFormatter())\nlogger = logging.getLogger(__name__)\nlogger.addHandler(handler)\nlogger.setLevel(logging.DEBUG)",
+        scores: { correctness: 4, completeness: 4, quality: 5, adherence: 4 },
+        total: 4.25,
+        pass: true
+      },
+      without_skill: {
+        output: "print('error happened')",
+        scores: { correctness: 2, completeness: 1, quality: 1, adherence: 2 },
+        total: 1.5,
+        pass: false
+      }
+    }
+  ];
+
+  var FALLBACK_SKILL_NAME = "example-skill (preview)";
+
+  // ── Helpers ───────────────────────────────────────────────────────
+
+  /** Safely parse JSON from a <script> tag, returning fallback on failure. */
+  function parseEmbedded(id, fallback) {
+    var el = document.getElementById(id);
+    if (!el) return fallback;
+    var raw = el.textContent.trim();
+    // If still contains unprocessed placeholder, use fallback
+    if (raw.indexOf("{{") !== -1) return fallback;
+    try { return JSON.parse(raw); }
+    catch (e) { return fallback; }
+  }
+
+  /** Return the CSS class for a numeric score. */
+  function scoreColor(score) {
+    if (score >= 4) return "green";
+    if (score >= 3) return "yellow";
+    return "red";
+  }
+
+  /** Return the CSS class name for a metric value color based on whether higher is better. */
+  function metricColor(withVal, withoutVal, higherIsBetter) {
+    if (higherIsBetter) {
+      return withVal >= withoutVal ? "green" : "red";
+    }
+    return withVal <= withoutVal ? "green" : "red";
+  }
+
+  /** Escape HTML entities. */
+  function esc(str) {
+    var d = document.createElement("div");
+    d.appendChild(document.createTextNode(str));
+    return d.innerHTML;
+  }
+
+  // ── Parse Data ────────────────────────────────────────────────────
+
+  var metrics = parseEmbedded("data-metrics", FALLBACK_METRICS);
+  var tests   = parseEmbedded("data-tests",   FALLBACK_TESTS);
+
+  // Resolve skill name from the <title> / <h1> placeholder
+  var rawTitle = document.title.replace("Skill Benchmark — ", "");
+  var skillName = (rawTitle.indexOf("{{") !== -1) ? FALLBACK_SKILL_NAME : rawTitle;
+
+  // ── Render Banner ─────────────────────────────────────────────────
+
+  document.getElementById("skill-name").textContent = skillName;
+
+  var metricDefs = [
+    {
+      label: "With Skill",
+      value: metrics.with_skill.avg_score.toFixed(1),
+      cls: scoreColor(metrics.with_skill.avg_score)
+    },
+    {
+      label: "Without Skill",
+      value: metrics.without_skill.avg_score.toFixed(1),
+      cls: scoreColor(metrics.without_skill.avg_score)
+    },
+    {
+      label: "Win Rate",
+      value: metrics.win_rate,
+      cls: "accent"
+    },
+    {
+      label: "Time (w/ skill)",
+      value: metrics.with_skill.time_seconds + "s",
+      cls: metricColor(
+        metrics.with_skill.time_seconds,
+        metrics.without_skill.time_seconds,
+        false
+      )
+    },
+    {
+      label: "Time (w/o skill)",
+      value: metrics.without_skill.time_seconds + "s",
+      cls: metricColor(
+        metrics.without_skill.time_seconds,
+        metrics.with_skill.time_seconds,
+        false
+      )
+    },
+    {
+      label: "Output (w/ skill)",
+      value: metrics.with_skill.output_chars.toLocaleString() + " chars",
+      cls: ""
+    },
+    {
+      label: "Output (w/o skill)",
+      value: metrics.without_skill.output_chars.toLocaleString() + " chars",
+      cls: ""
+    }
+  ];
+
+  var metricsRow = document.getElementById("metrics-row");
+  metricDefs.forEach(function (m) {
+    var card = document.createElement("div");
+    card.className = "metric-card";
+    card.innerHTML =
+      '<div class="label">' + esc(m.label) + '</div>' +
+      '<div class="value ' + m.cls + '">' + esc(m.value) + '</div>';
+    metricsRow.appendChild(card);
+  });
+
+  // ── Render Test Cases ─────────────────────────────────────────────
+
+  var container = document.getElementById("test-results");
+
+  tests.forEach(function (t, idx) {
+    var row = document.createElement("div");
+    row.className = "test-row";
+
+    // Test name + prompt
+    var header = '<div class="test-name">' + esc((idx + 1) + ". " + t.name) + '</div>';
+    if (t.prompt) {
+      header += '<div class="test-prompt">' + esc(t.prompt) + '</div>';
+    }
+
+    row.innerHTML = header + '<div class="comparison-columns">' +
+      buildCard(t.with_skill, "With Skill", "with") +
+      buildCard(t.without_skill, "Without Skill", "without") +
+      '</div>';
+
+    container.appendChild(row);
+  });
+
+  /** Build the HTML for one side of a test comparison. */
+  function buildCard(data, label, labelCls) {
+    var totalCls = scoreColor(data.total);
+    var passText = data.pass ? "PASS" : "FAIL";
+    var passCls  = data.pass ? "pass" : "fail";
+
+    var breakdownHTML = "";
+    if (data.scores) {
+      var dims = Object.keys(data.scores);
+      dims.forEach(function (dim) {
+        var s = data.scores[dim];
+        breakdownHTML +=
+          '<span class="score-item">' +
+            '<span class="dim-label">' + esc(dim) + '</span>' +
+            '<span class="dim-value ' + scoreColor(s) + '">' + s + '</span>' +
+          '</span>';
+      });
+    }
+
+    return (
+      '<div class="col"><div class="test-card">' +
+        '<div class="card-header">' +
+          '<span class="card-label ' + labelCls + '">' + esc(label) + '</span>' +
+          '<span>' +
+            '<span class="score-badge ' + totalCls + '">' + data.total.toFixed(1) + '</span> ' +
+            '<span class="pass-indicator ' + passCls + '">' + passText + '</span>' +
+          '</span>' +
+        '</div>' +
+        (breakdownHTML ? '<div class="score-breakdown">' + breakdownHTML + '</div>' : '') +
+        '<div class="output-block"><pre>' + esc(data.output || "") + '</pre></div>' +
+      '</div></div>'
+    );
+  }
+
+})();
+</script>
+
+</body>
+</html>
