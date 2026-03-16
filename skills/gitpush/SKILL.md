@@ -12,6 +12,9 @@ Push code to GitHub following basic industry practices, with explicit repo/branc
 - Never push `.env`, `.claude/**`, credentials, or secrets (e.g., keys, tokens, config with secrets).
 - Never push `.gitignore` — unstage it silently if it's staged.
 - Never push `memory.md` — unstage it silently if it's staged.
+- Never push `CLAUDE.md` — unstage it silently if it's staged.
+- Never push `learnings.md` — unstage it silently if it's staged.
+- Never push plans or specs files (e.g., `PLAN.md`, `SPEC.md`, `*-plan.md`, `*-spec.md`, `plans/`, `specs/`) — unstage them silently if staged. These are internal working documents for the user, not for the repo.
 - Always review `git status` and `git diff` before pushing.
 - **Always ask the user which repo and branch to push to — never assume.**
 - Always show a final confirmation summary and get explicit approval before committing or pushing.
@@ -175,13 +178,13 @@ options:
   - label: "Yes, update it"
     description: "I'll describe what changed and you update the README before pushing"
   - label: "No README exists — create one"    ← only show if README is missing
-    description: "Generate a basic README before pushing"
+    description: "Generate an in-depth README before pushing"
   - label: "Chat about this"
     description: "Stop — I want to talk about this first"
 ```
 
 - If user selects "Yes, update it": ask them what to add/change, make the edits, then continue.
-- If user selects "create one": generate a minimal README based on the repo contents, show it for approval, then continue.
+- If user selects "create one": generate an **in-depth README** based on the repo contents — not a minimal stub. Include: project description, features/highlights, requirements, full setup/installation steps, usage guide with examples, architecture overview, configuration details, and license. Read enough source files to write something comprehensive. Show it for approval, then continue.
 - If user selects "Chat about this": stop completely and listen.
 
 ### Step 3 — Scan for sensitive files
@@ -190,13 +193,102 @@ options:
 - `credentials.json`, `secrets.*`, `*.pem`, `*.key`
 - `.gitignore` — always exclude, unstage without asking
 - `memory.md` — always exclude, unstage without asking
+- `CLAUDE.md` — always exclude, unstage without asking
+- `learnings.md` — always exclude, unstage without asking
+- Plans and specs files (`PLAN.md`, `SPEC.md`, `*-plan.md`, `*-spec.md`, `plans/`, `specs/`, `PROGRESS.md`) — always exclude, unstage without asking
 - Any file containing obvious secrets
 
-If sensitive files are staged or modified, **stop and ask** the user what to do. For `.gitignore` and `memory.md`, unstage them silently with `git reset HEAD <file>` and note it in the confirmation summary.
+If sensitive files are staged or modified, **stop and ask** the user what to do. For `.gitignore`, `memory.md`, `CLAUDE.md`, `learnings.md`, and plan/spec files, unstage them silently with `git reset HEAD <file>` and note it in the confirmation summary.
 
 **Also audit `.gitignore` coverage before staging:**
 - `.env` in `.gitignore` does NOT match `.env.local` or `.env.*` — check that all dotenv variants are covered
 - If `.gitignore` is missing `.env.*` or `.env.local`, offer to add them before proceeding with `git add`
+
+### Step 3.5 — Security scan (BLOCKING — do not skip)
+
+Before showing the confirmation summary, **launch the security-scanner agent** to audit the entire codebase for security violations and sensitive data exposure.
+
+Dispatch a **general-purpose** Agent with this prompt:
+
+```
+Agent tool (general-purpose):
+  description: "Pre-push security scan"
+  prompt: |
+    You are the Security Scanner. Perform a fast pre-push security audit of the codebase at [project root].
+    This is a BLOCKING check — the push must NOT proceed if Critical findings exist.
+
+    ## Scan Checklist (execute ALL):
+
+    1. **Secrets in staged files** — scan `git diff --cached` for:
+       - API keys (sk-, ak_, ghp_, xoxb-, AKIA)
+       - Tokens (Discord bot tokens, JWT, bearer)
+       - Passwords/secrets in variable assignments
+       - Private keys (BEGIN RSA/OPENSSH PRIVATE KEY)
+       - Connection strings with embedded credentials
+       - .env file contents
+
+    2. **Secrets in full working tree** — grep the entire codebase for the patterns above
+
+    3. **.gitignore coverage** — verify .env*, *.pem, *.key, *.sqlite, credentials.json are covered
+
+    4. **Code security patterns** — check for:
+       - eval()/Function() with user input
+       - SQL injection (raw string concat in queries)
+       - Command injection (exec/spawn with unsanitized input)
+       - Missing permission checks on commands
+       - Prompt injection vulnerabilities in AI modules
+
+    5. **Config files** — verify YAML/JSON configs use ${ENV_VAR} syntax, no hardcoded secrets
+
+    ## Output Format:
+    CRITICAL: [list or "none"]
+    HIGH: [list or "none"]
+    MEDIUM: [list or "none"]
+    LOW: [list or "none"]
+    VERDICT: [SAFE TO PUSH | BLOCK — fix critical issues first]
+```
+
+**After the agent returns:**
+
+- If **VERDICT = SAFE TO PUSH** (zero Critical/High findings): proceed to Step 4 with a one-line summary (e.g., "Security scan: PASS — 0 critical, 2 low findings").
+
+- If **any findings exist (Critical, High, Medium, or Low):** present EACH finding to the user individually using `AskUserQuestion` as a prehook-style gate. Walk through findings from most severe to least severe.
+
+**For each finding, use this AskUserQuestion format:**
+
+```
+question: "Security finding: <short description of the issue>"
+header: "<CRITICAL|HIGH|MEDIUM|LOW>"
+options:
+  - label: "Fix it — remove/redact this"
+    description: "<explain WHY this is a security violation in plain language, e.g. 'This API key is hardcoded in source code. If pushed to GitHub, anyone with repo access can steal it and rack up charges on your account.'>"
+  - label: "Keep it — I accept the risk"
+    description: "Push this as-is. I understand the risk: <1-line consequence summary>"
+  - label: "Chat about this"
+    description: "Stop — I want to discuss this finding before deciding"
+```
+
+**Rules for the prehook walkthrough:**
+- Show ONE finding at a time — do not batch them into a single question
+- For each finding, explain in the description **why** it's a violation and **what could go wrong** (credential theft, unauthorized access, data leak, etc.) — don't just name the pattern, explain the real-world impact
+- If the user selects "Fix it": perform the fix immediately (delete the secret, move to env var, add to .gitignore, etc.) before showing the next finding
+- If the user selects "Keep it": log it as an accepted risk, move to the next finding
+- If the user selects "Chat about this": stop and listen, resume only when they redirect
+- After walking through ALL findings: if ANY Critical finding was kept (not fixed), show a final warning:
+  ```
+  question: "You chose to keep N critical security issue(s). Are you absolutely sure you want to push with these unresolved?"
+  header: "Final warning"
+  options:
+    - label: "Yes — push anyway"
+      description: "I accept full responsibility for these security risks"
+    - label: "Go back — let me fix them"
+      description: "Re-run the security findings I kept"
+    - label: "Cancel push"
+      description: "Abort — don't push anything"
+  ```
+- Include a one-line security summary in the Step 4 confirmation showing: findings total, fixed count, accepted count (e.g., "Security scan: 4 findings — 3 fixed, 1 accepted (LOW)").
+
+---
 
 ### Step 4 — Show final confirmation summary + AskUserQuestion gate (BLOCKING — do not skip)
 
@@ -326,10 +418,11 @@ Assistant:
 4. AskUserQuestion → "Record app for README?" (yes / have video / skip)
 5. AskUserQuestion → "Does the README need updating?" (yes / no / create)
 6. Scan for sensitive files — stop if any found.
-7. Show confirmation summary (repo, branch, files, commit message, author).
-8. AskUserQuestion → "Are you sure you want to push?" (Yes, push it / No, cancel)
-9. Commit and push only after explicit "Yes, push it".
-10. AskUserQuestion → "Deploy?" (No / Vercel / Railway / GitHub Pages / Netlify / Chrome Web Store)
+7. **Launch security-scanner agent** — full codebase audit. Block push if critical findings.
+8. Show confirmation summary (repo, branch, files, commit message, author, security scan result).
+9. AskUserQuestion → "Are you sure you want to push?" (Yes, push it / No, cancel)
+10. Commit and push only after explicit "Yes, push it".
+11. AskUserQuestion → "Deploy?" (No / Vercel / Railway / GitHub Pages / Netlify / Chrome Web Store)
 
 ---
 
