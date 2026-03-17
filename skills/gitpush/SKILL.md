@@ -27,8 +27,8 @@ Push code to GitHub following basic industry practices, with explicit repo/branc
   - If either is wrong, run `git config user.name "ashcastelinocs124"` and `git config user.email "ashleyn4@illinois.edu"` to fix before committing.
 
 ## Stored GitHub Identity
-- **Username:** `ashcastelinocs124`
-- **Email:** `ashleyn4@illinois.edu`
+- **Username:** `<your-username>`
+- **Email:** `<your-email>`
 - Always verify and fix git config to match before committing (see Step 1).
 
 ---
