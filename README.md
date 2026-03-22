@@ -1,4 +1,4 @@
-# Agentarium
+# CasStack
 
 A curated collection of **agents** and **skills** for AI coding assistants. Plug them into [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex), or any agent that supports the `.claude/` skill convention and instantly level up your development workflow.
 
